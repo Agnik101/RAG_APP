@@ -4,8 +4,7 @@ langchain-community
 langchain-text-splitters
 langchain-huggingface
 faiss-cpu>=1.12.0
-sentence-transformers==3.0.1
-torch==2.4.1
+sentence-transformers
 groq==0.9.0
 httpx==0.27.0
 numpy==1.26.4
