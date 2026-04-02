@@ -25,18 +25,33 @@ def get_pdf_text(pdf_docs):
     return text
 
 def get_vector_store(raw_text):
-    chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50).split_text(raw_text)
+    chunks = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=100).split_text(raw_text)
     embeddings = load_embeddings()
-    return FAISS.from_texts(chunks[:50], embeddings)  
+    
+    max_chunks = min(len(chunks), 200)
+    return FAISS.from_texts(chunks[:max_chunks], embeddings)
 
 def get_groq_response(question, vector_store, api_key, model="llama-3.1-8b-instant"):
-    docs = vector_store.similarity_search(question, k=2)
+    docs = vector_store.similarity_search(question, k=5)
     context = "\n".join([doc.page_content for doc in docs])
     
     client = Groq(api_key=api_key)
     return client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": f"CONTEXT:\n{context}\n\nQ: {question}\n\nA:"}],
+        messages=[{"role": "user", "content": f"""
+You are a helpful AI assistant.
+
+Answer the question using ONLY the context below.
+If the answer is not present, say "Not found in document".
+
+CONTEXT:
+{context}
+
+QUESTION:
+{question}
+
+Give a clear, structured answer.
+"""}],
         temperature=0,
         max_tokens=1000  
     ).choices[0].message.content
