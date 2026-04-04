@@ -94,16 +94,16 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Session State
-    for key in ['history', 'vector_store', 'current_q', 'current_a', 'show_workflow', 'ready_for_new']:
+    # Session State - Store API key and PDFs persistently
+    for key in ['history', 'vector_store', 'current_q', 'current_a', 'show_workflow', 'ready_for_new', 'api_key', 'pdf_processed']:
         if key not in st.session_state:
-            st.session_state[key] = "" if key in ['current_q', 'current_a'] else [] if key == 'history' else False if key == 'show_workflow' else True
+            st.session_state[key] = "" if key in ['current_q', 'current_a', 'api_key'] else [] if key == 'history' else False if key == 'show_workflow' else True if key == 'ready_for_new' else False
 
     
     st.markdown('<h1 class="header">PDF-BOT</h1>', unsafe_allow_html=True)
     
     # 🔥 Workflow toggle
-    if st.button("🔬 How It Works", key="workflow_btn", help="View RAG pipeline"):
+    if st.button("🔬 How It Works", key="workflow_btn"):
         st.session_state.show_workflow = not st.session_state.show_workflow
 
     if st.session_state.show_workflow:
@@ -122,34 +122,28 @@ def main():
         <p style='font-style: italic; color: #FCA5A5; font-size: 0.95rem;'>
         Powered by <b>FAISS</b> + <b>Groq</b> + <b>HuggingFace Embeddings</b>
         </p>
-        <p style='margin-top: 1rem;'>
-        For more information : 
-        <a href='https://github.com/Agnik101/RAG_APP' target='_blank' class='github-link'>
-        click here!
-        </a>
-        </p>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("### I'm Ready!")
 
-    # Quick action buttons - Only work if ready for new input
+    # Quick action buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📋 Key Points", key="keypoints") and st.session_state.ready_for_new:
+        if st.button("📋 Key Points", key="keypoints") and st.session_state.ready_for_new and st.session_state.pdf_processed:
             st.session_state.current_q = "List 5-8 KEY POINTS from this document as bullets:"
             st.session_state.current_a = ""
             st.session_state.ready_for_new = False
             st.rerun()
     
     with col2:
-        if st.button("📄 Summary", key="summary") and st.session_state.ready_for_new:
+        if st.button("📄 Summary", key="summary") and st.session_state.ready_for_new and st.session_state.pdf_processed:
             st.session_state.current_q = "Summarize the ENTIRE document in 200-300 words:"
             st.session_state.current_a = ""
             st.session_state.ready_for_new = False
             st.rerun()
 
-    # 🔥 MAIN CHAT DISPLAY - ONLY CURRENT CHAT VISIBLE
+    # 🔥 MAIN CHAT DISPLAY
     if st.session_state.current_q:
         st.markdown("### 💬 Current Chat")
         col_q, col_a = st.columns([1, 2])
@@ -161,45 +155,61 @@ def main():
             else:
                 st.info("**A:** ⏳ Generating answer...")
 
-    # 🔥 NEW QUESTION INPUT - Only shown when ready
-    if st.session_state.ready_for_new:
+    # 🔥 NEW QUESTION INPUT - Only when ready
+    if st.session_state.ready_for_new and st.session_state.pdf_processed:
         st.markdown("### 🔍 Ask your question:")
         q = st.text_input("", value="", key="question_input", 
                          placeholder="Type your question here and press Enter...")
         
-        # Process only when Enter is pressed (q changes from empty to filled)
         if q and q.strip():
             st.session_state.current_q = q.strip()
             st.session_state.current_a = ""
             st.session_state.ready_for_new = False
             st.rerun()
+    elif not st.session_state.pdf_processed:
+        st.warning("⚠️ **Please process PDFs first!**")
     else:
-        # Show "Ready for Next" button after chat completion
-        if st.button("➡️ Ready for Next Question", key="next_question", help="Clear chat and ask new question"):
+        # Show "Ready for Next" button
+        if st.button("➡️ Ready for Next Question", key="next_question"):
             st.session_state.current_q = ""
             st.session_state.current_a = ""
             st.session_state.ready_for_new = True
             st.rerun()
 
-    # Sidebar
-    api_key = None
+    # 🔥 SIDEBAR - FIXED PDF PROCESSING
     with st.sidebar:
         st.header("⚙️ Quick Setup")
         
-        api_key = st.text_input("Groq Key", type="password", key="api_key")
-        pdfs = st.file_uploader("PDFs", accept_multiple_files=True, type="pdf", key="pdfs")
+        # Store API key in session state
+        new_api_key = st.text_input("Groq Key", type="password", value=st.session_state.api_key, key="api_key_input")
+        if new_api_key != st.session_state.api_key:
+            st.session_state.api_key = new_api_key
         
-        if st.button("🚀 Process", key="process"):
-            if pdfs and api_key:
-                with st.spinner("Processing please wait.."):
-                    text = get_pdf_text(pdfs)
-                    st.session_state.vector_store = get_vector_store(text)
-                    st.success("✅ Ready!")
-                    gc.collect()  
+        pdfs = st.file_uploader("📄 Upload PDFs", accept_multiple_files=True, type="pdf", key="pdfs")
+        
+        # 🔥 FIXED PROCESS BUTTON
+        if st.button("🚀 Process PDFs", key="process_pdf"):
+            if pdfs and st.session_state.api_key.strip():
+                with st.spinner("🔄 Processing PDFs..."):
+                    try:
+                        text = get_pdf_text(pdfs)
+                        st.session_state.vector_store = get_vector_store(text)
+                        st.session_state.pdf_processed = True
+                        st.success("✅ PDFs Processed Successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error processing PDFs: {str(e)}")
+                        st.session_state.pdf_processed = False
             else:
-                st.error("❌ Please add PDFs and Groq API key first!")
+                st.error("❌ **Need PDFs + Groq API key!**")
 
-        # 🔥 RECENT CHATS - Last 3 only
+        # Show processing status
+        if st.session_state.pdf_processed:
+            st.success("📚 **PDFs Ready!** ✅")
+        else:
+            st.info("📤 Upload PDFs → Enter API key → Click Process")
+
+        # 🔥 RECENT CHATS
         st.markdown("### 📜 Recent Chats")
         if st.session_state.history:
             for h in st.session_state.history[-3:]:
@@ -207,29 +217,26 @@ def main():
         else:
             st.caption("💭 No chats yet...")
 
-    # 🔥 PROCESS QUESTION - Only when there's a question but no answer yet
-    if st.session_state.current_q and not st.session_state.current_a:
-        has_docs = 'vector_store' in st.session_state and st.session_state.vector_store
-        has_key = bool(api_key and api_key.strip())
+    # 🔥 PROCESS QUESTION - Uses stored API key
+    if (st.session_state.current_q and not st.session_state.current_a and 
+        st.session_state.pdf_processed and st.session_state.api_key.strip()):
         
-        if not has_docs or not has_key:
-            st.warning("⚠️ Please add PDFs + Groq API key and click 'Process' first!")
-        else:
-            with st.spinner("🔮 Thinking..."):
-                answer = get_groq_response(st.session_state.current_q, st.session_state.vector_store, api_key)
-                
-                # Update current chat
-                st.session_state.current_a = answer
-                
-                # Add to history (keep only last 3)
-                history_entry = f"Q: {st.session_state.current_q[:50]} | A: {answer[:50]}..."
-                if history_entry not in st.session_state.history:
-                    st.session_state.history.append(history_entry)
-                    if len(st.session_state.history) > 3:
-                        st.session_state.history = st.session_state.history[-3:]
-                
-                st.session_state.ready_for_new = False  # Stay in chat mode
-            st.rerun()
+        with st.spinner("🔮 Thinking..."):
+            answer = get_groq_response(st.session_state.current_q, 
+                                     st.session_state.vector_store, 
+                                     st.session_state.api_key)
+            
+            # Update current chat
+            st.session_state.current_a = answer
+            
+            # Add to history
+            history_entry = f"Q: {st.session_state.current_q[:50]} | A: {answer[:50]}..."
+            if history_entry not in st.session_state.history:
+                st.session_state.history.append(history_entry)
+                if len(st.session_state.history) > 3:
+                    st.session_state.history = st.session_state.history[-3:]
+            
+        st.rerun()
 
 if __name__ == "__main__":
     main()
