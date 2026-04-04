@@ -167,7 +167,7 @@ def main():
             st.session_state.ready_for_new = False
             st.rerun()
     elif not st.session_state.pdf_processed:
-        st.warning("⚠️ **Please process PDFs first!**")
+        st.warning("⚠️ **Please process PDFs first by clicking the top left >> key!**")
     else:
         # Show "Ready for Next" button
         if st.button("➡️ Ready for Next Question", key="next_question"):
