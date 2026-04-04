@@ -94,10 +94,10 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Session State - Modified to track only current chat
-    for key in ['history', 'vector_store', 'current_q', 'current_a', 'show_workflow']:
+    # Session State
+    for key in ['history', 'vector_store', 'current_q', 'current_a', 'show_workflow', 'ready_for_new']:
         if key not in st.session_state:
-            st.session_state[key] = "" if key in ['current_q', 'current_a'] else [] if key == 'history' else False
+            st.session_state[key] = "" if key in ['current_q', 'current_a'] else [] if key == 'history' else False if key == 'show_workflow' else True
 
     
     st.markdown('<h1 class="header">PDF-BOT</h1>', unsafe_allow_html=True)
@@ -133,39 +133,53 @@ def main():
 
     st.markdown("### I'm Ready!")
 
-    # Quick action buttons
+    # Quick action buttons - Only work if ready for new input
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📋 Key Points", key="keypoints", help="5-8 bullet points"):
+        if st.button("📋 Key Points", key="keypoints") and st.session_state.ready_for_new:
             st.session_state.current_q = "List 5-8 KEY POINTS from this document as bullets:"
-            st.session_state.current_a = ""  # Clear previous answer
+            st.session_state.current_a = ""
+            st.session_state.ready_for_new = False
             st.rerun()
     
     with col2:
-        if st.button("📄 Summary", key="summary", help="Full document overview"):
+        if st.button("📄 Summary", key="summary") and st.session_state.ready_for_new:
             st.session_state.current_q = "Summarize the ENTIRE document in 200-300 words:"
-            st.session_state.current_a = ""  # Clear previous answer
+            st.session_state.current_a = ""
+            st.session_state.ready_for_new = False
             st.rerun()
 
     # 🔥 MAIN CHAT DISPLAY - ONLY CURRENT CHAT VISIBLE
-    if st.session_state.current_q and st.session_state.current_a:
+    if st.session_state.current_q:
         st.markdown("### 💬 Current Chat")
         col_q, col_a = st.columns([1, 2])
         with col_q:
             st.info(f"**Q:** {st.session_state.current_q}")
         with col_a:
-            st.success(f"**A:** {st.session_state.current_a}")
-        
-        st.markdown("---")
-    
-    elif st.session_state.current_q and not st.session_state.current_a:
-        st.markdown("### 💬 Processing...")
-        st.info(f"**Q:** {st.session_state.current_q}")
-        st.info("Generating answer...")
+            if st.session_state.current_a:
+                st.success(f"**A:** {st.session_state.current_a}")
+            else:
+                st.info("**A:** ⏳ Generating answer...")
 
-    # 🔥 NEW QUESTION INPUT - Always empty for next question
-    q = st.text_input("🔍 Ask your question:", value="", key="question_input", 
-                     placeholder="Type your question here...")
+    # 🔥 NEW QUESTION INPUT - Only shown when ready
+    if st.session_state.ready_for_new:
+        st.markdown("### 🔍 Ask your question:")
+        q = st.text_input("", value="", key="question_input", 
+                         placeholder="Type your question here and press Enter...")
+        
+        # Process only when Enter is pressed (q changes from empty to filled)
+        if q and q.strip():
+            st.session_state.current_q = q.strip()
+            st.session_state.current_a = ""
+            st.session_state.ready_for_new = False
+            st.rerun()
+    else:
+        # Show "Ready for Next" button after chat completion
+        if st.button("➡️ Ready for Next Question", key="next_question", help="Clear chat and ask new question"):
+            st.session_state.current_q = ""
+            st.session_state.current_a = ""
+            st.session_state.ready_for_new = True
+            st.rerun()
 
     # Sidebar
     api_key = None
@@ -188,35 +202,33 @@ def main():
         # 🔥 RECENT CHATS - Last 3 only
         st.markdown("### 📜 Recent Chats")
         if st.session_state.history:
-            for h in st.session_state.history[-3:]:  # LAST 3 ONLY
+            for h in st.session_state.history[-3:]:
                 st.caption(f"• {h[:80]}...")
         else:
             st.caption("💭 No chats yet...")
 
-    
-    if q and q.strip(): 
+    # 🔥 PROCESS QUESTION - Only when there's a question but no answer yet
+    if st.session_state.current_q and not st.session_state.current_a:
         has_docs = 'vector_store' in st.session_state and st.session_state.vector_store
         has_key = bool(api_key and api_key.strip())
         
         if not has_docs or not has_key:
             st.warning("⚠️ Please add PDFs + Groq API key and click 'Process' first!")
-            st.info("💡 Upload documents → Enter Groq key → Click Process → Ask away!")
         else:
-            # Clear previous chat and process new one
-            with st.spinner("Thinking..."):
-                answer = get_groq_response(q.strip(), st.session_state.vector_store, api_key)
+            with st.spinner("🔮 Thinking..."):
+                answer = get_groq_response(st.session_state.current_q, st.session_state.vector_store, api_key)
                 
                 # Update current chat
-                st.session_state.current_q = q.strip()
                 st.session_state.current_a = answer
                 
                 # Add to history (keep only last 3)
-                history_entry = f"Q: {q.strip()[:50]} | A: {answer[:50]}..."
+                history_entry = f"Q: {st.session_state.current_q[:50]} | A: {answer[:50]}..."
                 if history_entry not in st.session_state.history:
                     st.session_state.history.append(history_entry)
                     if len(st.session_state.history) > 3:
                         st.session_state.history = st.session_state.history[-3:]
-            
+                
+                st.session_state.ready_for_new = False  # Stay in chat mode
             st.rerun()
 
 if __name__ == "__main__":
