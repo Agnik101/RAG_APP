@@ -3,7 +3,6 @@ from pypdf import PdfReader
 from datetime import datetime
 import gc 
 
-# ✅ ONLY THESE 3 LINES CHANGED
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -95,19 +94,18 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Session State
+    # Session State - Modified to track only current chat
     for key in ['history', 'vector_store', 'current_q', 'current_a', 'show_workflow']:
         if key not in st.session_state:
             st.session_state[key] = "" if key in ['current_q', 'current_a'] else [] if key == 'history' else False
 
-    # ---------------- HEADER ---------------- #
+    
     st.markdown('<h1 class="header">PDF-BOT</h1>', unsafe_allow_html=True)
     
-    # ---------------- WORKFLOW BUTTON ---------------- #
+    # 🔥 Workflow toggle
     if st.button("🔬 How It Works", key="workflow_btn", help="View RAG pipeline"):
         st.session_state.show_workflow = not st.session_state.show_workflow
 
-    # Workflow explanation + GitHub
     if st.session_state.show_workflow:
         st.markdown("""
         <div style='background: rgba(239, 68, 68, 0.15); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #EF4444; margin: 1rem 0;'>
@@ -135,34 +133,49 @@ def main():
 
     st.markdown("### I'm Ready!")
 
-    # ---------------- QUICK BUTTONS ---------------- #
+    # Quick action buttons
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📋 Key Points", key="keypoints", help="5-8 bullet points"):
             st.session_state.current_q = "List 5-8 KEY POINTS from this document as bullets:"
+            st.session_state.current_a = ""  # Clear previous answer
+            st.rerun()
     
     with col2:
         if st.button("📄 Summary", key="summary", help="Full document overview"):
             st.session_state.current_q = "Summarize the ENTIRE document in 200-300 words:"
+            st.session_state.current_a = ""  # Clear previous answer
+            st.rerun()
 
-    if st.session_state.current_q:
-        st.markdown("### 💬 Answer")
-        st.info(st.session_state.current_q)
-        if st.session_state.current_a:
-            st.success(st.session_state.current_a)
-        else:
-            st.info("👇 Setup PDFs first")
+    # 🔥 MAIN CHAT DISPLAY - ONLY CURRENT CHAT VISIBLE
+    if st.session_state.current_q and st.session_state.current_a:
+        st.markdown("### 💬 Current Chat")
+        col_q, col_a = st.columns([1, 2])
+        with col_q:
+            st.info(f"**Q:** {st.session_state.current_q}")
+        with col_a:
+            st.success(f"**A:** {st.session_state.current_a}")
+        
+        st.markdown("---")
+    
+    elif st.session_state.current_q and not st.session_state.current_a:
+        st.markdown("### 💬 Processing...")
+        st.info(f"**Q:** {st.session_state.current_q}")
+        st.info("Generating answer...")
 
-    st.markdown("---")
-    q = st.text_input("Or ask anything:", value=st.session_state.current_q)
+    # 🔥 NEW QUESTION INPUT - Always empty for next question
+    q = st.text_input("🔍 Ask your question:", value="", key="question_input", 
+                     placeholder="Type your question here...")
 
+    # Sidebar
+    api_key = None
     with st.sidebar:
         st.header("⚙️ Quick Setup")
         
-        api_key = st.text_input("Groq Key", type="password")
-        pdfs = st.file_uploader("PDFs", accept_multiple_files=True, type="pdf")
+        api_key = st.text_input("Groq Key", type="password", key="api_key")
+        pdfs = st.file_uploader("PDFs", accept_multiple_files=True, type="pdf", key="pdfs")
         
-        if st.button("🚀 Process"):
+        if st.button("🚀 Process", key="process"):
             if pdfs and api_key:
                 with st.spinner("Processing please wait.."):
                     text = get_pdf_text(pdfs)
@@ -172,7 +185,7 @@ def main():
             else:
                 st.error("❌ Please add PDFs and Groq API key first!")
 
-        
+        # 🔥 RECENT CHATS - Last 3 only
         st.markdown("### 📜 Recent Chats")
         if st.session_state.history:
             for h in st.session_state.history[-3:]:  # LAST 3 ONLY
@@ -181,23 +194,30 @@ def main():
             st.caption("💭 No chats yet...")
 
     
-    if q:
+    if q and q.strip(): 
         has_docs = 'vector_store' in st.session_state and st.session_state.vector_store
-        has_key = bool(api_key.strip())
+        has_key = bool(api_key and api_key.strip())
         
         if not has_docs or not has_key:
             st.warning("⚠️ Please add PDFs + Groq API key and click 'Process' first!")
             st.info("💡 Upload documents → Enter Groq key → Click Process → Ask away!")
-        elif q != st.session_state.current_q or not st.session_state.current_a:
-            with st.spinner("Let me think..."):
-                answer = get_groq_response(q, st.session_state.vector_store, api_key)
-                st.session_state.current_q = q
-                st.session_state.current_a = answer
-                st.session_state.history.append(f"Q: {q[:50]} | A: {answer[:50]}...")
-            st.rerun()
         else:
-            st.markdown("### 💬 Answer")
-            st.success(st.session_state.current_a)
+            # Clear previous chat and process new one
+            with st.spinner("Thinking..."):
+                answer = get_groq_response(q.strip(), st.session_state.vector_store, api_key)
+                
+                # Update current chat
+                st.session_state.current_q = q.strip()
+                st.session_state.current_a = answer
+                
+                # Add to history (keep only last 3)
+                history_entry = f"Q: {q.strip()[:50]} | A: {answer[:50]}..."
+                if history_entry not in st.session_state.history:
+                    st.session_state.history.append(history_entry)
+                    if len(st.session_state.history) > 3:
+                        st.session_state.history = st.session_state.history[-3:]
+            
+            st.rerun()
 
 if __name__ == "__main__":
     main()
