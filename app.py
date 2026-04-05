@@ -58,7 +58,6 @@ Give a clear, structured answer.
 def main():
     st.set_page_config(page_title="PDF-BOT", page_icon="⚡", layout="wide")
     
-    # 🔥 PURE RED BUTTONS - ALL IDENTICAL
     st.markdown("""
     <style>
     .stApp {background: #0a0a0a;}
@@ -102,7 +101,7 @@ def main():
     
     st.markdown('<h1 class="header">PDF-BOT</h1>', unsafe_allow_html=True)
     
-    # 🔥 Workflow toggle
+    
     if st.button("🔬 How It Works", key="workflow_btn"):
         st.session_state.show_workflow = not st.session_state.show_workflow
 
@@ -143,7 +142,7 @@ def main():
             st.session_state.ready_for_new = False
             st.rerun()
 
-    # 🔥 MAIN CHAT DISPLAY
+    
     if st.session_state.current_q:
         st.markdown("### 💬 Current Chat")
         col_q, col_a = st.columns([1, 2])
@@ -155,7 +154,7 @@ def main():
             else:
                 st.info("**A:** ⏳ Generating answer...")
 
-    # 🔥 NEW QUESTION INPUT - Only when ready
+    
     if st.session_state.ready_for_new and st.session_state.pdf_processed:
         st.markdown("### 🔍 Ask your question:")
         q = st.text_input("", value="", key="question_input", 
@@ -169,14 +168,14 @@ def main():
     elif not st.session_state.pdf_processed:
         st.warning("⚠️ **Please process PDFs first by clicking the top left >> key!**")
     else:
-        # Show "Ready for Next" button
+        
         if st.button("➡️ Ready for Next Question", key="next_question"):
             st.session_state.current_q = ""
             st.session_state.current_a = ""
             st.session_state.ready_for_new = True
             st.rerun()
 
-    # 🔥 SIDEBAR - FIXED PDF PROCESSING
+    
     with st.sidebar:
         st.header("⚙️ Quick Setup")
         
@@ -187,7 +186,7 @@ def main():
         
         pdfs = st.file_uploader("📄 Upload PDFs", accept_multiple_files=True, type="pdf", key="pdfs")
         
-        # 🔥 FIXED PROCESS BUTTON
+        
         if st.button("🚀 Process PDFs", key="process_pdf"):
             if pdfs and st.session_state.api_key.strip():
                 with st.spinner("🔄 Processing PDFs..."):
@@ -203,7 +202,7 @@ def main():
             else:
                 st.error("❌ **Need PDFs + Groq API key!**")
 
-        # Show processing status
+        
         if st.session_state.pdf_processed:
             st.success("📚 **PDFs Ready!** ✅")
         else:
@@ -217,7 +216,7 @@ def main():
         else:
             st.caption("💭 No chats yet...")
 
-    # 🔥 PROCESS QUESTION - Uses stored API key
+    
     if (st.session_state.current_q and not st.session_state.current_a and 
         st.session_state.pdf_processed and st.session_state.api_key.strip()):
         
