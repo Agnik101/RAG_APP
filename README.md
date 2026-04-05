@@ -2,8 +2,12 @@
 <hr></hr>
 <br></br>
 <h2>Overview</h2>
-<p1>PDF-BOT is a fast and efficient Retrieval-Augmented Generation (RAG) application built using Streamlit, FAISS, HuggingFace embeddings, and Groq LLM (Llama 3.1).
+<p1>PDF-BOT is a fast and efficient Retrieval-Augmented Generation (RAG) application built using Streamlit, FAISS, HuggingFace embeddings, and Groq LLM (Llama 3.1).</p1>
+<br></br>
 
+
+🚀 **Live App:** https://mypdfbot2026.streamlit.app/
+<br></br>
 It allows users to:
 
 Upload PDF documents 📄 ,
